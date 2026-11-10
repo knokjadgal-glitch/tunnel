@@ -5,7 +5,8 @@
 # ============================================================
 
 G='\033[0;32m'; R='\033[0;31m'; Y='\033[1;33m'; C='\033[0;36m'; N='\033[0m'
-DL="https://github.com/Musixal/Backhaul/releases/download/v0.7.2/backhaul_linux_amd64.tar.gz"
+case "$(uname -m)" in aarch64|arm64) ARCH=arm64 ;; *) ARCH=amd64 ;; esac
+DL="https://github.com/Musixal/Backhaul/releases/download/v0.7.2/backhaul_linux_${ARCH}.tar.gz"
 DIR="/root/backhaul-free"
 
 [ "$(id -u)" -eq 0 ] || { echo -e "${R}Run as root${N}"; exit 1; }
@@ -39,8 +40,9 @@ new_iran() {
     echo -e "${C}=== New IRAN Tunnel ===${N}"
     echo -ne "${Y}Tunnel name (e.g. de1, fr2): ${N}"; read name
     [ -z "$name" ] && { echo -e "${R}Name required${N}"; return; }
-    echo -ne "${Y}Tunnel port (unique! e.g. 8443, 8444): ${N}"; read tport
-    echo -ne "${Y}Token: ${N}"; read token; token=${token:-123456789}
+    echo -ne "${Y}Tunnel port (unique, NOT an inbound port! e.g. 3080, 3081): ${N}"; read tport
+    deftok=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
+    echo -ne "${Y}Token (Enter = random ${deftok}): ${N}"; read token; token=${token:-$deftok}
     echo -ne "${Y}Service port(s) (e.g. 2020 or 2020,5050): ${N}"; read ports
     echo -ne "${Y}Transport (default tcpmux): ${N}"; read tr; tr=${tr:-tcpmux}
 
@@ -74,7 +76,9 @@ EOF
     systemctl daemon-reload && systemctl enable --now backhaul-${name} >/dev/null 2>&1
     systemctl restart backhaul-${name}
     save_fw "$tport"
+    for p in "${P[@]}"; do save_fw "$(echo $p|xargs|cut -d= -f1|cut -d: -f1)"; done
     echo -e "${G}✅ IRAN tunnel '$name' created (port $tport)${N}"
+    echo -e "${Y}    Token (kharej needs this): ${token}${N}"
     sleep 2; journalctl -u backhaul-${name} -n 5 --no-pager | cat
 }
 
@@ -84,7 +88,8 @@ new_kharej() {
     [ -z "$name" ] && { echo -e "${R}Name required${N}"; return; }
     echo -ne "${Y}IRAN server IP: ${N}"; read iranip
     echo -ne "${Y}Tunnel port (same as iran side): ${N}"; read tport
-    echo -ne "${Y}Token: ${N}"; read token; token=${token:-123456789}
+    echo -ne "${Y}Token (same as iran side): ${N}"; read token
+    [ -z "$token" ] && { echo -e "${R}Token required${N}"; return; }
     echo -ne "${Y}Transport (default tcpmux): ${N}"; read tr; tr=${tr:-tcpmux}
 
     enable_bbr; download_bin
