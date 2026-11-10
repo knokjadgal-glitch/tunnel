@@ -1,27 +1,50 @@
+Claude
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Backhaul multi · SH
 #!/bin/bash
 # ============================================================
 #   Backhaul Multi-Tunnel Manager (Free)
 #   Run MULTIPLE tunnels on one server (each with own name/port)
 #   After first run, just type:  bh
 # ============================================================
-
+ 
 G='\033[0;32m'; R='\033[0;31m'; Y='\033[1;33m'; C='\033[0;36m'; N='\033[0m'
 URL="https://raw.githubusercontent.com/knokjadgal-glitch/tunnel/main/backhaul-multi.sh"
 VER="v0.7.2"
 case "$(uname -m)" in aarch64|arm64) ARCH=arm64 ;; *) ARCH=amd64 ;; esac
 DL="https://github.com/Musixal/Backhaul/releases/download/${VER}/backhaul_linux_${ARCH}.tar.gz"
 DIR="/root/backhaul-free"
-
+ 
 [ "$(id -u)" -eq 0 ] || { echo -e "${R}Run as root${N}"; exit 1; }
-
+ 
 # ---------- self install as "bh" ----------
 if [ "$(readlink -f "$0")" != "/usr/local/bin/bh" ]; then
     curl -fsSL "$URL" -o /usr/local/bin/bh 2>/dev/null && chmod +x /usr/local/bin/bh \
         && echo -e "${G}Installed! From now on just type: bh${N}" && sleep 2
 fi
-
+ 
 pause() { echo ""; echo -ne "${Y}Press Enter...${N}"; read; }
-
+ 
 enable_bbr() {
     grep -q "tcp_congestion_control=bbr" /etc/sysctl.conf 2>/dev/null || {
         echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
@@ -30,16 +53,16 @@ enable_bbr() {
     sysctl -p >/dev/null 2>&1
     echo -e "${G}    BBR: $(sysctl -n net.ipv4.tcp_congestion_control)${N}"
 }
-
+ 
 download_bin() {
     mkdir -p "$DIR"
     if [ ! -f "$DIR/backhaul" ]; then
         echo -e "${C}[+] Downloading...${N}"
-        cd /root && wget -q "$DL" -O bh.tar.gz && tar -xzf bh.tar.gz -C "$DIR" && rm -f bh.tar.gz && chmod +x "$DIR/backhaul"
+        cd /root && curl -fsSL "$DL" -o bh.tar.gz && tar -xzf bh.tar.gz -C "$DIR" && rm -f bh.tar.gz && chmod +x "$DIR/backhaul"
     fi
     [ -f "$DIR/backhaul" ] && echo -e "${G}    Binary ready${N}" || { echo -e "${R}Download failed${N}"; exit 1; }
 }
-
+ 
 save_fw() {
     [ -z "$1" ] && return
     iptables -C INPUT -p tcp --dport "$1" -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport "$1" -j ACCEPT 2>/dev/null
@@ -48,7 +71,7 @@ save_fw() {
     netfilter-persistent save >/dev/null 2>&1
     echo -e "${G}    Firewall $1 opened${N}"
 }
-
+ 
 write_service() {   # $1=name  $2=cfg
     cat > /etc/systemd/system/backhaul-$1.service << EOF
 [Unit]
@@ -64,14 +87,14 @@ EOF
     systemctl daemon-reload && systemctl enable --now backhaul-$1 >/dev/null 2>&1
     systemctl restart backhaul-$1
 }
-
+ 
 ports_to_toml() {   # "2020,5050" -> toml lines
     local out="" p
     IFS=',' read -ra PP <<< "$1"
     for p in "${PP[@]}"; do p=$(echo "$p" | xargs); [ -n "$p" ] && out="$out    \"$p\",\n"; done
     echo -e "$out"
 }
-
+ 
 # ---------------- create ----------------
 new_iran() {
     echo -e "${C}=== New IRAN Tunnel ===${N}"
@@ -83,7 +106,7 @@ new_iran() {
     echo -ne "${Y}Token (Enter = random ${deftok}): ${N}"; read token; token=${token:-$deftok}
     echo -ne "${Y}Forward port(s) (e.g. 2020 or 2020,5050): ${N}"; read ports
     echo -ne "${Y}Transport [tcp/tcpmux/ws/wsmux/udp] (default tcpmux): ${N}"; read tr; tr=${tr:-tcpmux}
-
+ 
     enable_bbr; download_bin
     cfg="$DIR/iran-${name}.toml"
     cat > "$cfg" << EOF
@@ -105,7 +128,7 @@ EOF
     echo -e "${Y}    Token (kharej needs this): ${token}${N}"
     sleep 2; journalctl -u backhaul-${name} -n 5 --no-pager | cat
 }
-
+ 
 new_kharej() {
     echo -e "${C}=== New KHAREJ Tunnel ===${N}"
     echo -ne "${Y}Tunnel name (e.g. de1): ${N}"; read name
@@ -116,7 +139,7 @@ new_kharej() {
     echo -ne "${Y}Token (same as iran side): ${N}"; read token
     [ -z "$token" ] && { echo -e "${R}Token required${N}"; return; }
     echo -ne "${Y}Transport (same as iran side, default tcpmux): ${N}"; read tr; tr=${tr:-tcpmux}
-
+ 
     enable_bbr; download_bin
     cfg="$DIR/kharej-${name}.toml"
     cat > "$cfg" << EOF
@@ -134,12 +157,12 @@ EOF
     echo -e "${G}✅ KHAREJ tunnel '$name' -> ${iranip}:${tport}${N}"
     sleep 3; journalctl -u backhaul-${name} -n 5 --no-pager | cat
 }
-
+ 
 # ---------------- helpers for editing ----------------
 get_val() { grep -E "^$2 *=" "$1" | head -1 | cut -d'"' -f2; }          # file key
 set_val() { sed -i -E "s|^($2 *= *\").*(\")|\1$3\2|" "$1"; }            # file key value
 get_ports() { sed -n '/^ports *= *\[/,/\]/p' "$1" | grep -oE '"[^"]+"' | tr -d '"' | paste -sd, -; }
-
+ 
 # fills arrays NAMES[] ROLES[] CFGS[]
 collect() {
     NAMES=(); ROLES=(); CFGS=()
@@ -149,7 +172,7 @@ collect() {
         NAMES+=("${b#*-}"); ROLES+=("${b%%-*}"); CFGS+=("$f")
     done
 }
-
+ 
 list_tunnels() {
     collect
     echo -e "${C}--- All Backhaul Tunnels ---${N}"
@@ -167,9 +190,9 @@ list_tunnels() {
     done
     return 0
 }
-
+ 
 apply_restart() { systemctl restart backhaul-$1 && echo -e "${G}✅ Saved & restarted${N}"; }
-
+ 
 # ---------------- tunnel submenu ----------------
 manage_tunnel() {
     list_tunnels || return
@@ -177,7 +200,7 @@ manage_tunnel() {
     idx=$((num-1))
     [ -z "${NAMES[$idx]}" ] && { echo -e "${R}Invalid${N}"; return; }
     n=${NAMES[$idx]}; role=${ROLES[$idx]}; f=${CFGS[$idx]}
-
+ 
     while true; do
         clear
         echo -e "${C}=== Tunnel: ${Y}$n${C} ($role) ===${N}"
@@ -273,13 +296,13 @@ manage_tunnel() {
         pause
     done
 }
-
+ 
 update_script() {
     curl -fsSL "$URL" -o /usr/local/bin/bh && chmod +x /usr/local/bin/bh \
         && echo -e "${G}Updated. Run: bh${N}" && exit 0
     echo -e "${R}Update failed${N}"
 }
-
+ 
 uninstall_all() {
     echo -ne "${R}Remove ALL tunnels and bh? (y/N): ${N}"; read y
     [ "$y" != "y" ] && return
@@ -292,7 +315,7 @@ uninstall_all() {
     rm -rf "$DIR" /usr/local/bin/bh
     echo -e "${G}Everything removed${N}"; exit 0
 }
-
+ 
 # ---------------- main menu ----------------
 while true; do
     clear
@@ -320,3 +343,4 @@ while true; do
         *) echo -e "${R}Invalid${N}"; pause ;;
     esac
 done
+ 
